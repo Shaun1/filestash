@@ -231,11 +231,23 @@ function componentRight(render, { getSelectionLength$ }) {
     effect(getSelectionLength$.pipe(
         rxjs.filter((l) => l === 0),
         rxjs.mergeMap(() => getState$().pipe(rxjs.first())),
-        rxjs.map(({ view, sort, search }) => ({
+        rxjs.map(({ view, sort, search, from, to }) => ({
             search,
+            from,
+            to,
             $page: render(createFragment(`
-                <form style="display: inline-block;" onsubmit="event.preventDefault()">
-                    <input value="${safe(search)}" class="hidden" placeholder="${t("search")}" name="q" id="searchInput" aria-label="${t("search")}" tabindex="-1" autocapitalize="none" />
+                <form class="component_search_form" style="display: inline-block;" onsubmit="event.preventDefault()">
+                    <input value="${safe(search || "")}" class="hidden" placeholder="${t("search")}" name="q" id="searchInput" aria-label="${t("search")}" tabindex="-1" autocapitalize="none" />
+                    <span class="component_search_range hidden">
+                        <label>
+                            <span>${t("From")}</span>
+                            <input type="datetime-local" name="from" value="${safe(msToDatetimeLocal(from))}" aria-label="${t("From")}" />
+                        </label>
+                        <label>
+                            <span>${t("To")}</span>
+                            <input type="datetime-local" name="to" value="${safe(msToDatetimeLocal(to))}" aria-label="${t("To")}" />
+                        </label>
+                    </span>
                 </form>
                 <button data-action="search" title="${t("Search")}" aria-controls="searchInput" class=${getConfig("enable_search") ? "" : "hidden"}>
                     <img class="component_icon" draggable="false" src="data:image/svg+xml;base64,${ICONS.MAGNIFYING_GLASS}" alt="search" />
@@ -267,7 +279,7 @@ function componentRight(render, { getSelectionLength$ }) {
                 </div>
             `))
         })),
-        rxjs.mergeMap(({ $page, search }) => rxjs.merge(
+        rxjs.mergeMap(({ $page, search, from, to }) => rxjs.merge(
             // feature: view button
             onClick(qs($page, `[data-action="view"]`)).pipe(rxjs.tap(($button) => {
                 const $img = $button.querySelector("img");
@@ -334,17 +346,19 @@ function componentRight(render, { getSelectionLength$ }) {
                         rxjs.filter((e) => (e.ctrlKey || e.metaKey) && e.key === "f"),
                         preventDefault(),
                     ),
-                ).pipe(rxjs.map(() => qs($page, "input").classList.contains("hidden"))),
+                ).pipe(rxjs.map(() => qs($page, "input[name=\"q\"]").classList.contains("hidden"))),
                 escape$.pipe(rxjs.mapTo(false)),
-                search ? rxjs.of(true) : rxjs.EMPTY,
+                (search || from || to) ? rxjs.of(true) : rxjs.EMPTY,
             ).pipe(
                 rxjs.takeUntil(getSelection$().pipe(rxjs.skip(1))),
                 rxjs.mergeMap(async(show) => {
-                    const $input = qs($page, "input");
-                    const $searchImg = qs($page, "img");
+                    const $input = qs($page, "input[name=\"q\"]");
+                    const $range = qs($page, ".component_search_range");
+                    const $searchImg = qs($page, `[data-action="search"] img`);
                     if (show) {
                         $page.classList.add("hover");
                         $input.classList.remove("hidden");
+                        $range.classList.remove("hidden");
                         $searchImg.setAttribute("src", "data:image/svg+xml;base64," + ICONS.CROSS);
                         $searchImg.setAttribute("alt", "close");
 
@@ -368,28 +382,43 @@ function componentRight(render, { getSelectionLength$ }) {
                             time: 100,
                         });
                         $input.classList.add("hidden");
+                        $range.classList.add("hidden");
                         $input.value = "";
+                        qs($page, "input[name=\"from\"]").value = "";
+                        qs($page, "input[name=\"to\"]").value = "";
                         const $listOfButtons = $page.parentElement.firstElementChild.children;
                         for (const $item of $listOfButtons) {
                             $item.classList.remove("hidden");
                             animate($item, { time: 100, keyframes: slideXIn(5) });
                         }
-                        setState("search", "");
+                        setState("search", "", "from", null, "to", null);
                     }
-                    return $input;
+                    return $page;
                 }),
-                rxjs.mergeMap(($input) => rxjs.merge(
-                    rxjs.fromEvent($input, "input"),
-                    rxjs.fromEvent($input, "change"),
-                ).pipe(
-                    rxjs.map(() => $input.value),
-                    rxjs.distinctUntilChanged(),
-                    rxjs.tap((val) => setState("search", val)),
+                rxjs.mergeMap(($formPage) => rxjs.merge(
+                    rxjs.merge(
+                        rxjs.fromEvent(qs($formPage, "input[name=\"q\"]"), "input"),
+                        rxjs.fromEvent(qs($formPage, "input[name=\"q\"]"), "change"),
+                    ).pipe(
+                        rxjs.map(() => qs($formPage, "input[name=\"q\"]").value),
+                        rxjs.distinctUntilChanged(),
+                        rxjs.tap((val) => setState("search", val)),
+                    ),
+                    rxjs.fromEvent(qs($formPage, "input[name=\"from\"]"), "change").pipe(
+                        rxjs.map(() => datetimeLocalToMs(qs($formPage, "input[name=\"from\"]").value)),
+                        rxjs.distinctUntilChanged(),
+                        rxjs.tap((val) => setState("from", val)),
+                    ),
+                    rxjs.fromEvent(qs($formPage, "input[name=\"to\"]"), "change").pipe(
+                        rxjs.map(() => datetimeLocalToMs(qs($formPage, "input[name=\"to\"]").value)),
+                        rxjs.distinctUntilChanged(),
+                        rxjs.tap((val) => setState("to", val)),
+                    ),
                 )),
             ),
         )),
     ));
-    onDestroy(() => setState("search", ""));
+    onDestroy(() => setState("search", "", "from", null, "to", null));
 
     effect(getSelectionLength$.pipe(
         rxjs.filter((l) => l >= 1),
@@ -435,4 +464,18 @@ function generateLinkAttributes(selections) {
 
 function toggleDependingOnPermission(path, action) {
     return calculatePermission(path, action) === false ? ` style="display:none"` : "";
+}
+
+function msToDatetimeLocal(ms) {
+    if (ms == null) return "";
+    const d = new Date(ms);
+    if (Number.isNaN(d.getTime())) return "";
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function datetimeLocalToMs(value) {
+    if (!value) return null;
+    const ms = new Date(value).getTime();
+    return Number.isFinite(ms) ? ms : null;
 }

@@ -76,41 +76,42 @@ export default async function(render) {
         rxjs.switchMap(({ files, ...rest }) => getState$().pipe(rxjs.switchMap((state) => {
             $header.innerHTML = "";
             $list.innerHTML = "";
-            if (state.search) {
+            if (state.search || state.from || state.to) {
                 const removeLoader = createLoader($header);
                 $listBefore.setAttribute("style", "");
                 $listAfter.setAttribute("style", "");
                 return rxjs.timer(state.search ? 450 : 0).pipe(
-                    rxjs.switchMap(() => search(state.search).pipe(
+                    rxjs.switchMap(() => search(state.search || "", state.from, state.to).pipe(
                         rxjs.map(({ files }) => ({
                             files, ...state, ...rest,
                         })),
                     )),
                     removeLoader,
-                    rxjs.tap(() => searchUrlParam(state.search)),
+                    rxjs.tap(() => searchUrlParam(state.search, state.from, state.to)),
                 );
             }
-            searchUrlParam(null);
+            searchUrlParam(null, null, null);
             return rxjs.of({ files, ...state, ...rest });
         }))),
         rxjs.mergeMap((obj) => getPermission(path).pipe(
             rxjs.map((permissions) => ({ ...obj, permissions })),
         )),
-        rxjs.mergeMap(({ show_hidden, files, search, ...rest }) => {
+        rxjs.mergeMap(({ show_hidden, files, search, from, to, ...rest }) => {
             if (show_hidden === false) files = files.filter(({ name }) => name[0] !== ".");
-            if (!search) files = sort(files, rest["sort"], rest["order"]);
-            return rxjs.of({ ...rest, files, search });
+            const isSearching = !!(search || from || to);
+            if (!isSearching) files = sort(files, rest["sort"], rest["order"]);
+            return rxjs.of({ ...rest, files, search, from, to, isSearching });
         }),
         rxjs.map((data) => ({ ...data, count: count++ })),
         removeLoader,
         rxjs.switchMap((obj) => refreshScreen$.pipe(rxjs.mapTo(obj))),
-        rxjs.mergeMap(({ files, search, ...rest }) => {
+        rxjs.mergeMap(({ files, search, isSearching, ...rest }) => {
             files$.next(files);
             if (files.length === 0) {
-                renderEmpty(createRender(qs($page, `[data-target="header"]`)), search ? ICONS.EMPTY_SEARCH : ICONS.EMPTY_FILES);
+                renderEmpty(createRender(qs($page, `[data-target="header"]`)), isSearching ? ICONS.EMPTY_SEARCH : ICONS.EMPTY_FILES);
                 return rxjs.EMPTY;
             }
-            return rxjs.of({ ...rest, files, search });
+            return rxjs.of({ ...rest, files, search, isSearching });
         }),
         rxjs.mergeMap(({ files, view, search, count, permissions }) => { // STEP1: setup the list of files
             $list.closest(".scroll-y").scrollTop = 0;

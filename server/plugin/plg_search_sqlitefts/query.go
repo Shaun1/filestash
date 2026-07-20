@@ -27,5 +27,5 @@ func (this SearchEngine) Query(app App, path string, keyword string) ([]IFile, e
 		InitialPath: path,
 		Name:        filepath.Base(path),
 	})
-	return crwlr.State.Search(path, keyword)
+	return crwlr.State.Search(path, keyword, SearchTimeRangeFromContext(app.Context))
 }

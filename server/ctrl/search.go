@@ -1,7 +1,9 @@
 package ctrl
 
 import (
+	"context"
 	"net/http"
+	"strconv"
 	"strings"
 
 	. "github.com/mickael-kerjean/filestash/server/common"
@@ -14,19 +16,41 @@ func FileSearch(ctx *App, res http.ResponseWriter, req *http.Request) {
 		path = "/"
 	}
 	q := req.URL.Query().Get("q")
+	from, err := parseOptionalInt64(req.URL.Query().Get("from"))
+	if err != nil {
+		SendErrorResult(res, ErrNotValid)
+		return
+	}
+	to, err := parseOptionalInt64(req.URL.Query().Get("to"))
+	if err != nil {
+		SendErrorResult(res, ErrNotValid)
+		return
+	}
+	if q == "" && from == nil && to == nil {
+		SendErrorResult(res, ErrNotValid)
+		return
+	}
 	if permissions.CanRead(ctx) == false {
 		Log.Debug("ctrl::search 'can not read \"%s\"'", path)
 		SendErrorResult(res, ErrPermissionDenied)
 		return
 	}
 
-	var searchResults []IFile
 	searchEngine := Hooks.Get.SearchEngine()
 	if searchEngine == nil {
 		SendErrorResult(res, ErrMissingDependency)
 		return
 	}
-	searchResults, err = searchEngine.Query(*ctx, path, q)
+
+	rangeFilter := SearchTimeRange{From: from, To: to}
+	if HasSearchTimeRange(rangeFilter) {
+		if ctx.Context == nil {
+			ctx.Context = context.Background()
+		}
+		ctx.Context = WithSearchTimeRange(ctx.Context, rangeFilter)
+	}
+
+	searchResults, err := searchEngine.Query(*ctx, path, q)
 	if err != nil {
 		SendErrorResult(res, err)
 		return
@@ -38,6 +62,7 @@ func FileSearch(ctx *App, res http.ResponseWriter, req *http.Request) {
 			searchResults[i] = File{
 				FName: searchResults[i].Name(),
 				FSize: searchResults[i].Size(),
+				FTime: FileTimeMs(searchResults[i]),
 				FType: func() string {
 					if searchResults[i].IsDir() {
 						return "directory"
@@ -52,4 +77,15 @@ func FileSearch(ctx *App, res http.ResponseWriter, req *http.Request) {
 		}
 	}
 	SendSuccessResults(res, searchResults)
+}
+
+func parseOptionalInt64(s string) (*int64, error) {
+	if s == "" {
+		return nil, nil
+	}
+	v, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
 }

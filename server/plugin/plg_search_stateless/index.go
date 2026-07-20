@@ -22,6 +22,7 @@ func (this StatelessSearch) Query(app App, path string, keyword string) ([]IFile
 	files := make([]IFile, 0)
 	toVisit := []PathQuandidate{PathQuandidate{path, 0}}
 	MAX_SEARCH_TIME := SEARCH_TIMEOUT()
+	timeRange := SearchTimeRangeFromContext(app.Context)
 
 	for start := time.Now(); time.Since(start) < MAX_SEARCH_TIME; {
 		if len(toVisit) == 0 {
@@ -47,24 +48,31 @@ func (this StatelessSearch) Query(app App, path string, keyword string) ([]IFile
 				[]rune(strings.ToLower(name)),
 				[]rune(strings.ToLower(keyword)),
 			); isAMatch {
-				files = append(files, File{
-					FName: name,
-					FType: func() string {
-						if f[i].IsDir() {
-							return "directory"
-						}
-						return "file"
-					}(),
-					FSize: f[i].Size(),
-					FTime: f[i].ModTime().Unix() * 1000,
-					FPath: func() string {
-						p := JoinPath(currentPath.Path, name)
-						if f[i].IsDir() {
-							p = p + "/"
-						}
-						return p
-					}(),
-				})
+				if InTimeRange(f[i].ModTime(), timeRange.From, timeRange.To) {
+					mt := f[i].ModTime()
+					var fTime int64
+					if !mt.IsZero() {
+						fTime = mt.UnixMilli()
+					}
+					files = append(files, File{
+						FName: name,
+						FType: func() string {
+							if f[i].IsDir() {
+								return "directory"
+							}
+							return "file"
+						}(),
+						FSize: f[i].Size(),
+						FTime: fTime,
+						FPath: func() string {
+							p := JoinPath(currentPath.Path, name)
+							if f[i].IsDir() {
+								p = p + "/"
+							}
+							return p
+						}(),
+					})
+				}
 			}
 
 			// follow directories

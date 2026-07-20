@@ -4,13 +4,22 @@ import { settingsGet, settingsSave } from "../../lib/store.js";
 
 let state$ = null;
 export function init() {
+    const params = new URLSearchParams(location.search);
     state$ = new rxjs.BehaviorSubject(settingsGet({
         view: getConfig("default_view", "grid"),
         show_hidden: getConfig("display_hidden", false),
         sort: getConfig("default_sort", "type"),
         order: undefined,
-        search: new URLSearchParams(location.search).get("q"),
+        search: params.get("q"),
+        from: parseOptionalMs(params.get("from")),
+        to: parseOptionalMs(params.get("to")),
     }, "filespage"));
+}
+
+function parseOptionalMs(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
 }
 
 export const getState$ = () => state$.asObservable();

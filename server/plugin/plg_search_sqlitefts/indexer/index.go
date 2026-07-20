@@ -13,7 +13,7 @@ import (
 
 type Index interface {
 	Init() error
-	Search(path string, q string) ([]IFile, error)
+	Search(path string, q string, timeRange SearchTimeRange) ([]IFile, error)
 	Change() (Manager, error)
 	Close() error
 }

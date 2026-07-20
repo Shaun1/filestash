@@ -157,17 +157,28 @@ export const refresh = () => {
     bc.postMessage(null);
 };
 
-export const search = (term) => ajax({
-    url: withURLParams(`api/files/search?path=${encodeURIComponent(currentPath())}&q=${encodeURIComponent(term)}`),
-    responseType: "json"
-}).pipe(rxjs.map(({ responseJSON }) => ({
-    files: responseJSON.results,
-})));
+export const search = (term, from = null, to = null) => {
+    const params = new URLSearchParams();
+    params.set("path", currentPath());
+    if (term) params.set("q", term);
+    if (from != null) params.set("from", String(from));
+    if (to != null) params.set("to", String(to));
+    return ajax({
+        url: withURLParams(`api/files/search?${params.toString()}`),
+        responseType: "json"
+    }).pipe(rxjs.map(({ responseJSON }) => ({
+        files: responseJSON.results,
+    })));
+};
 
-export const searchUrlParam = (term = null) => {
+export const searchUrlParam = (term = null, from = null, to = null) => {
     const url = new URL(location.href);
     if (term) url.searchParams.set("q", term);
     else url.searchParams.delete("q");
+    if (from != null) url.searchParams.set("from", String(from));
+    else url.searchParams.delete("from");
+    if (to != null) url.searchParams.set("to", String(to));
+    else url.searchParams.delete("to");
     history.replaceState(history.state, "", url.toString());
 };
 

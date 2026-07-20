@@ -90,6 +90,39 @@
     color: var(--color);
     font-size: 0.95rem;
 }
+[is="component_submenu"] .component_submenu .action .component_search_form {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    vertical-align: middle;
+}
+[is="component_submenu"] .component_submenu .action .component_search_range {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+[is="component_submenu"] .component_submenu .action .component_search_range.hidden {
+    display: none;
+}
+[is="component_submenu"] .component_submenu .action .component_search_range label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    color: var(--light);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+[is="component_submenu"] .component_submenu .action .component_search_range input[type="datetime-local"] {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--color);
+    font-size: 0.8rem;
+    padding: 2px 4px;
+    max-width: 170px;
+}
 
 /* dark mode */
 .dark-mode [is="component_submenu"] .component_submenu .action button img {
